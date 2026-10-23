@@ -11,10 +11,23 @@ import {BalanceDelta} from "v4-core/types/BalanceDelta.sol";
 import {SwapParams, ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol";
 
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
+import {IHooks} from "v4-core/interfaces/IHooks.sol";
 
 import {Hooks} from "v4-core/libraries/Hooks.sol";
 
 contract PointsHook is BaseHook, ERC1155 {
+    // Time window during which swaps in a pool earn points
+    struct Campaign {
+        uint64 start;
+        uint64 end;
+    }
+
+    mapping(PoolId => Campaign) public campaigns;
+
+    error InvalidHookAddress();
+    error InvalidCampaign();
+    error MustInitializeThroughHook();
+
     constructor(IPoolManager _manager) BaseHook(_manager) {}
 
     function getHookPermissions()
@@ -25,7 +38,7 @@ contract PointsHook is BaseHook, ERC1155 {
     {
         return
             Hooks.Permissions({
-                beforeInitialize: false,
+                beforeInitialize: true,
                 afterInitialize: false,
                 beforeAddLiquidity: false,
                 beforeRemoveLiquidity: false,
@@ -46,6 +59,31 @@ contract PointsHook is BaseHook, ERC1155 {
         return "https://api.example.com/token/{id}";
     }
 
+    // Initialize a pool with its points campaign window.
+    // Initialize carries no hookData, so the window is stored here before initializing.
+    function initializePool(
+        PoolKey calldata key,
+        uint160 sqrtPriceX96,
+        uint64 start,
+        uint64 end
+    ) external returns (int24 tick) {
+        if (key.hooks != IHooks(address(this))) revert InvalidHookAddress();
+        if (start >= end) revert InvalidCampaign();
+
+        campaigns[key.toId()] = Campaign(start, end);
+        tick = poolManager.initialize(key, sqrtPriceX96);
+    }
+
+    function _beforeInitialize(
+        address sender,
+        PoolKey calldata,
+        uint160
+    ) internal view override returns (bytes4) {
+        // Pools must be created via initializePool so they get a campaign window
+        if (sender != address(this)) revert MustInitializeThroughHook();
+        return this.beforeInitialize.selector;
+    }
+
     function _afterSwap(
         address,
         PoolKey calldata key,
@@ -58,6 +96,14 @@ contract PointsHook is BaseHook, ERC1155 {
 
         // We only mint points if user is buying TOKEN with ETH
         if (!swapParams.zeroForOne) return (this.afterSwap.selector, 0);
+
+        // No points outside this pool's campaign window
+        // Validators can only nudge the timestamp by seconds, fine for a campaign window
+        Campaign memory campaign = campaigns[key.toId()];
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp < campaign.start || block.timestamp >= campaign.end) {
+            return (this.afterSwap.selector, 0);
+        }
 
         // Mint points equal to 20% of the amount of ETH they spent
         // Since its a zeroForOne swap:

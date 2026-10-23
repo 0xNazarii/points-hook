@@ -12,6 +12,7 @@ import {SwapParams, ModifyLiquidityParams} from "v4-core/types/PoolOperation.sol
 import {IPoolManager} from "v4-core/interfaces/IPoolManager.sol";
 
 import {Currency, CurrencyLibrary} from "v4-core/types/Currency.sol";
+import {PoolKey} from "v4-core/types/PoolKey.sol";
 import {PoolId} from "v4-core/types/PoolId.sol";
 
 import {Hooks} from "v4-core/libraries/Hooks.sol";
@@ -46,7 +47,9 @@ contract TestPointsHook is Test, Deployers, ERC1155TokenReceiver {
         token.mint(address(1), 1000 ether);
 
         // Deploy hook to an address that has the proper flags set
-        uint160 flags = uint160(Hooks.AFTER_SWAP_FLAG);
+        uint160 flags = uint160(
+            Hooks.BEFORE_INITIALIZE_FLAG | Hooks.AFTER_SWAP_FLAG
+        );
         deployCodeTo("PointsHook.sol", abi.encode(manager), address(flags));
 
         // Deploy our hook
@@ -58,12 +61,19 @@ contract TestPointsHook is Test, Deployers, ERC1155TokenReceiver {
         token.approve(address(modifyLiquidityRouter), type(uint256).max);
 
         // Initialize a pool
-        (key, ) = initPool(
+        // Pools must be initialized through the hook to set a points campaign
+        key = PoolKey(
             ethCurrency, // Currency 0 = ETH
             tokenCurrency, // Currency 1 = TOKEN
-            hook, // Hook Contract
             3000, // Swap Fees
-            SQRT_PRICE_1_1 // Initial Sqrt(P) value = 1
+            60, // Tick Spacing
+            hook // Hook Contract
+        );
+        hook.initializePool(
+            key,
+            SQRT_PRICE_1_1, // Initial Sqrt(P) value = 1
+            uint64(block.timestamp), // Campaign start
+            uint64(block.timestamp + 30 days) // Campaign end
         );
 
         // Add some liquidity to the pool
