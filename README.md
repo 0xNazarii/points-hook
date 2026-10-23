@@ -9,6 +9,14 @@ every time somebody swaps ETH for TOKEN (i.e. spends ETH, purchases TOKEN) - we 
 
 > This is not production ready by any means. It is a PoC.
 
+### Deployments
+
+| Chain | PointsHook |
+|---|---|
+| Unichain (130) | [`0xC39D7A7610E45c6eda4641053d25b805475f2040`](https://uniscan.xyz/address/0xC39D7A7610E45c6eda4641053d25b805475f2040) |
+
+pools must be created through `hook.initializePool(key, sqrtPriceX96, start, end)` - see [campaign window](#campaign-window)
+
 ### Design
 
 1. how many points do we give out per swap?
