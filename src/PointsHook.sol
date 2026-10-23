@@ -68,6 +68,8 @@ contract PointsHook is BaseHook, ERC1155 {
         //      this is an "exact output for input" swap
         //      amount of ETH they spent is equal to BalanceDelta.amount0()
 
+        // casting to 'uint256' is safe because amount0 is negative on a zeroForOne swap
+        // forge-lint: disable-next-line(unsafe-typecast)
         uint256 ethSpendAmount = uint256(int256(-delta.amount0()));
         uint256 pointsForSwap = ethSpendAmount / 5;
 

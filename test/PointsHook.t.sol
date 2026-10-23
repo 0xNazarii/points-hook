@@ -67,7 +67,6 @@ contract TestPointsHook is Test, Deployers, ERC1155TokenReceiver {
         );
 
         // Add some liquidity to the pool
-        uint160 sqrtPriceAtTickLower = TickMath.getSqrtPriceAtTick(-60);
         uint160 sqrtPriceAtTickUpper = TickMath.getSqrtPriceAtTick(60);
 
         uint256 ethToAdd = 0.1 ether;
@@ -75,11 +74,6 @@ contract TestPointsHook is Test, Deployers, ERC1155TokenReceiver {
             SQRT_PRICE_1_1,
             sqrtPriceAtTickUpper,
             ethToAdd
-        );
-        uint256 tokenToAdd = LiquidityAmounts.getAmount1ForLiquidity(
-            sqrtPriceAtTickLower,
-            SQRT_PRICE_1_1,
-            liquidityDelta
         );
 
         modifyLiquidityRouter.modifyLiquidity{value: ethToAdd}(
