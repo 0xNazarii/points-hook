@@ -158,3 +158,60 @@ in the case of Adding Liquidity to a pool,
 
 amount0 = -ve
 amount1 = -ve
+
+---
+
+### improvements
+
+#### hookData validation
+
+`abi.decode(hookData, (address))` reverts on bad input (too short, or junk in the upper 12 bytes of the word)
+
+a revert inside `afterSwap` reverts the whole swap - so a typo in hookData would break the user's swap, not just skip their points
+
+so we validate it ourselves first:
+
+- hookData must be exactly 32 bytes
+- decode it as a `uint256` (can't revert) and check the upper 12 bytes are zero
+- only then cast it to an address
+
+anything else = no points, but the swap still goes through
+
+#### campaign window
+
+points programs usually run in "seasons" - so each pool gets a time window during which swaps earn points
+
+```
+struct Campaign {
+    uint64 start;
+    uint64 end;
+}
+```
+
+swaps outside `[start, end)` still work, they just don't earn points
+
+how do we set the window per pool?
+
+ideally we'd pass it in when the pool is initialized, but `PoolManager.initialize(key, sqrtPriceX96)` doesn't take hookData
+
+so instead the hook has its own entry point:
+
+```
+hook.initializePool(key, sqrtPriceX96, start, end)
+-> stores the campaign for this pool
+-> calls poolManager.initialize(key, sqrtPriceX96)
+```
+
+but anyone could still call `poolManager.initialize` directly with our hook and skip this
+
+so we also use `beforeInitialize` as a guard:
+
+Alice -> Hook.initializePool -> PoolManager.initialize -> Hook.beforeInitialize(sender)
+sender = Hook address
+
+Alice -> PoolManager.initialize -> Hook.beforeInitialize(sender)
+sender = Alice => revert
+
+i.e. pools using this hook can only be created through `initializePool`, so every pool has a campaign
+
+> `initializePool` is permissionless. a pool can only be initialized once and points are per-pool, so whoever creates the pool picks its window
