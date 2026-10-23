@@ -47,6 +47,10 @@ abstract contract Base_Test is Test, Deployers {
     /// @dev Points token id for the default pool
     uint256 internal poolIdUint;
 
+    /// @dev Campaign window of the default pool
+    uint64 internal campaignStart;
+    uint64 internal campaignEnd;
+
     /*//////////////////////////////////////////////////////////////
                                CONTRACTS
     //////////////////////////////////////////////////////////////*/
@@ -80,13 +84,10 @@ abstract contract Base_Test is Test, Deployers {
         hook = PointsHook(flags);
 
         // Initialize the ETH/TOKEN pool through the hook with a campaign starting now
+        campaignStart = uint64(block.timestamp);
+        campaignEnd = campaignStart + CAMPAIGN_DURATION;
         key = PoolKey(ethCurrency, tokenCurrency, 3000, 60, hook);
-        hook.initializePool(
-            key,
-            SQRT_PRICE_1_1,
-            uint64(block.timestamp),
-            uint64(block.timestamp) + CAMPAIGN_DURATION
-        );
+        hook.initializePool(key, SQRT_PRICE_1_1, campaignStart, campaignEnd);
         poolIdUint = uint256(PoolId.unwrap(key.toId()));
 
         // Add liquidity in [-60, 60] around price 1
