@@ -84,14 +84,21 @@ contract PointsHook is BaseHook, ERC1155 {
         bytes calldata hookData,
         uint256 points
     ) internal {
-        // If no hookData is passed in, no points will be assigned to anyone
-        if (hookData.length == 0) return;
+        // hookData must be exactly one abi-encoded address, otherwise nobody gets points.
+        // Validate it ourselves since abi.decode would revert the whole swap on bad input.
+        if (hookData.length != 32) return;
+
+        // Decode as uint256 (can't revert on 32 bytes) and check the upper 12 bytes are
+        // zero ourselves, since decoding straight to address reverts when they aren't
+        uint256 word = abi.decode(hookData, (uint256));
+        if (word >> 160 != 0) return;
 
         // Extract user address from hookData
-        address user = abi.decode(hookData, (address));
+        // casting to 'uint160' is safe because the upper bits were checked above
+        // forge-lint: disable-next-line(unsafe-typecast)
+        address user = address(uint160(word));
 
-        // If there is hookData but not in the format we're expecting and user address is zero
-        // nobody gets any points
+        // Zero address can't receive points
         if (user == address(0)) return;
 
         // Mint points to the user
